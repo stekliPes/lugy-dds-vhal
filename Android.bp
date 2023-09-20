@@ -1,6 +1,6 @@
-package {
-    default_applicable_licenses: ["hardware_interfaces_license"],
-}
+//package {
+//    default_applicable_licenses: ["hardware_interfaces_license"],
+//}
 
 cc_binary {
     name: "lugy.dds.vhal@0.1-service",
