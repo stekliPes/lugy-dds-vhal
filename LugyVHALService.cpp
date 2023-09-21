@@ -29,6 +29,8 @@ using ::android::hardware::automotive::vehicle::V2_0::VehiclePropertyStore;
 using ::android::hardware::automotive::vehicle::V2_0::impl::DefaultVehicleConnector;
 using ::android::hardware::automotive::vehicle::V2_0::impl::DefaultVehicleHal;
 
+namespace vhal_v2_0 = android::hardware::automotive::vehicle::V2_0;
+
 int main(int /* argc */, char* /* argv */ []) {
     auto store = std::make_unique<VehiclePropertyStore>();
     auto connector = std::make_unique<DefaultVehicleConnector>();
@@ -46,7 +48,16 @@ int main(int /* argc */, char* /* argv */ []) {
         return 1;
     }
 
-    ALOGI("Ready");
+    ALOGI("Ready, getting properties");
+    std::vector<vhal_v2_0::VehiclePropConfig> properties = hal->listProperties();
+
+    ALOGI("Properties count: %d",properties.size());
+
+    for (uint i=0; i<properties.size(); i++)
+    {
+	const vhal_v2_0::VehiclePropConfig prop = properties[i];
+	ALOGI("Property #%d: configString %s, access %d, changeMode %d, ID %d",i,prop.configString.c_str(),prop.access,prop.changeMode,prop.prop);
+    }
     android::hardware::joinRpcThreadpool();
 
     return 0;
