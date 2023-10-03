@@ -32,12 +32,15 @@ using ::android::hardware::automotive::vehicle::V2_0::impl::DefaultVehicleHal;
 namespace vhal_v2_0 = android::hardware::automotive::vehicle::V2_0;
 
 int main(int /* argc */, char* /* argv */ []) {
+    ALOGI("VHAL startup");
     auto store = std::make_unique<VehiclePropertyStore>();
     auto connector = std::make_unique<DefaultVehicleConnector>();
     auto hal = std::make_unique<DefaultVehicleHal>(store.get(), connector.get());
     auto service = std::make_unique<VehicleHalManager>(hal.get());
+    ALOGI("Setting value pool");
     connector->setValuePool(hal->getValuePool());
 
+    ALOGI("Configuring RPC threadpool");
     android::hardware::configureRpcThreadpool(4, true /* callerWillJoin */);
 
     ALOGI("Registering as service...");
