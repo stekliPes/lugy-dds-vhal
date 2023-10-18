@@ -31,14 +31,114 @@ using ::android::hardware::automotive::vehicle::V2_0::impl::DefaultVehicleHal;
 
 namespace vhal_v2_0 = android::hardware::automotive::vehicle::V2_0;
 
+class LugyVhal : public VehicleHal
+{
+    public:
+
+    LugyVhal(VehiclePropertyStore* propStore, /*VehicleHalClient* client*/)
+    :
+    mPropertyStore(propStore)/*,
+    mVehicleClient(client)*/
+    {
+        
+    }
+
+    virtual std::vector<VehiclePropConfig> listProperties()
+    {
+        return mPropertyStore->getAllConfigs();
+    }
+    virtual VehiclePropValuePtr get(const VehiclePropValue& requestedPropValue,StatusCode* outStatus)
+    {
+        auto propId = requestedPropValue.prop;
+        ALOGV("get(%d)", propId);
+
+        VehiclePropValuePtr v = nullptr;
+        if (propId == OBD2_FREEZE_FRAME) {
+            v = getValuePool()->obtainComplex();
+            *outStatus = fillObd2FreezeFrame(mPropStore, requestedPropValue, v.get());
+            return addTimestamp(std::move(v));
+        }
+
+        if (propId == OBD2_FREEZE_FRAME_INFO) {
+            v = getValuePool()->obtainComplex();
+            *outStatus = fillObd2DtcInfo(mPropStore, v.get());
+            return addTimestamp(std::move(v));
+        }
+
+        auto internalPropValue = mPropStore->readValueOrNull(requestedPropValue);
+        if (internalPropValue != nullptr) {
+            v = getValuePool()->obtain(*internalPropValue);
+        }
+
+        if (!v) {
+            *outStatus = StatusCode::INVALID_ARG;
+        } else if (v->status == VehiclePropertyStatus::AVAILABLE) {
+            *outStatus = StatusCode::OK;
+        } else {
+            *outStatus = StatusCode::TRY_AGAIN;
+        }
+        return addTimestamp(std::move(v));
+    }
+
+    virtual StatusCode set(const VehiclePropValue& propValue)
+    {
+        if (propValue.status != VehiclePropertyStatus::AVAILABLE) 
+        {
+            return StatusCode::INVALID_ARG;
+        }
+        
+        int32_t property = propValue.prop;
+        const VehiclePropConfig* config = mPropStore->getConfigOrNull(property);
+        if (config == nullptr) {
+            ALOGW("no config for prop 0x%x", property);
+            return StatusCode::INVALID_ARG;
+        }
+
+        auto currentPropValue = mPropStore->readValueOrNull(propValue);
+        if (currentPropValue && currentPropValue->status != VehiclePropertyStatus::AVAILABLE) {
+            // do not allow Android side to set() a disabled/error property
+            return StatusCode::NOT_AVAILABLE;
+        }
+
+        // Send the value to the vehicle server, the server will talk to the (real or emulated) car
+        
+        // publish this value to CAN/DDS,ehternet, LIN, whatever... and return 
+        
+        VehiclePropValuePtr updatedPropValue = getValuePool()->obtain(value);
+
+        if (mPropStore->writeValue(*updatedPropValue, updateStatus)) {
+            doHalEvent(std::move(updatedPropValue));
+        }
+
+        return StatusCode::OK;
+    }
+
+    virtual StatusCode subscribe(int32_t property, float sampleRate)
+    {
+        ALOGE("subscribe not implemented in LugyVHAL");
+        return StatusCode::INTERNAL_ERROR;
+    };
+
+    virtual StatusCode unsubscribe(int32_t property)
+    {
+        return StatusCode::OK;
+    };
+
+    private:
+
+    VehiclePropertyStore *mPropertyStore;
+    //VehicleHalClient *mVehicleClient;
+
+}
+
 int main(int /* argc */, char* /* argv */ []) {
     ALOGI("VHAL startup");
     auto store = std::make_unique<VehiclePropertyStore>();
-    auto connector = std::make_unique<DefaultVehicleConnector>();
-    auto hal = std::make_unique<DefaultVehicleHal>(store.get(), connector.get());
+    //auto connector = std::make_unique<DefaultVehicleConnector>();
+    auto hal = std::make_unique<LugyVhal>(store.get(),/*connector.get()*/);
     auto service = std::make_unique<VehicleHalManager>(hal.get());
-    ALOGI("Setting value pool");
-    connector->setValuePool(hal->getValuePool());
+    //ALOGI("Setting value pool");
+    //connector->setValuePool(hal->getValuePool());
 
     ALOGI("Configuring RPC threadpool");
     android::hardware::configureRpcThreadpool(4, true /* callerWillJoin */);
@@ -56,10 +156,14 @@ int main(int /* argc */, char* /* argv */ []) {
 
     ALOGI("Properties count: %d",properties.size());
 
+    VehiclePropValue value;
+
     for (uint i=0; i<properties.size(); i++)
     {
-	const vhal_v2_0::VehiclePropConfig prop = properties[i];
-	ALOGI("Property #%d: configString %s, access %d, changeMode %d, ID %d",i,prop.configString.c_str(),prop.access,prop.changeMode,prop.prop);
+	    const vhal_v2_0::VehiclePropConfig prop = properties[i];
+	    ALOGI("Property #%d: configString %s, access %d, changeMode %d, ID %d",i,prop.configString.c_str(),prop.access,prop.changeMode,prop.prop);
+
+        prop.
     }
     android::hardware::joinRpcThreadpool();
 
